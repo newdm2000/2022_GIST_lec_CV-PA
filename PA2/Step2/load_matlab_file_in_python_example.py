@@ -12,12 +12,12 @@ import cv2
 def main():
 
     eng = matlab.engine.start_matlab()
-    eng.addpath(r'C:\app\SfM', nargout=0) # 'calibrated_fivepoint.m'가 위치한 경로
+    eng.addpath(r'/home/dongmin/2022_GIST_lec_CV-PA/PA2/Step2/', nargout=0) # 'calibrated_fivepoint.m'가 위치한 경로
     end = time.time()
     for i in range(100):
         a = np.random.rand(3,5).tolist()
         a = matlab.double(a)
-        b = np.random.rand(3, 5).tolist()
+        b = np.random.rand(3,5).tolist()
         b = matlab.double(b)
         E = eng.calibrated_fivepoint(a, b)
         print(np.asarray(E))
