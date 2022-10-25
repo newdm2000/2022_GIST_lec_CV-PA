@@ -88,7 +88,7 @@ for iter in range(max_iter):
     for i in range(len(E[0])):
         Ei = E[:, i].reshape(3, 3)
         det = np.linalg.det(Ei)
-        Ei = Ei.T
+        #Ei = Ei
         F = inst_1.T@Ei@inst_1
         #F = F.T
         det = np.linalg.det(F)
@@ -135,14 +135,16 @@ print(E_est)
 print(s_est) """
 
 print("step C")
-U, s, V = np.linalg.svd(E_est, full_matrices = True)
+U, s, VT = np.linalg.svd(E_est, full_matrices = True)
 print(s)
 u3 = U[:, 2].reshape(3, 1)
+print(U)
+print(u3)
 P = [
-np.append(U@W@V, u3, axis=1),
-np.append(U@W@V, -u3, axis=1),
-np.append(U@W.T@V, u3, axis=1),
-np.append(U@W.T@V, -u3, axis=1)]
+np.append(U@W@VT, u3, axis=1),
+np.append(U@W@VT, -u3, axis=1),
+np.append(U@W.T@VT, u3, axis=1),
+np.append(U@W.T@VT, -u3, axis=1)]
 #print(P1)
 #W = [[0, -1, 0], [1, 0, 0], [0, 0, 1]]
 """res2 = cv2.drawMatchesKnn(img1,kp1,img2,kp2,good,res2,flags=2)        
@@ -150,7 +152,6 @@ res2 = cv2.resize(res2, dsize=(0, 0), fx=0.5, fy=0.5)
 cv2.imshow("BF with SIFT",res2)
 cv2.waitKey(0)
 cv2.d """
-
 for i in range(1):
     for j in range(4):
         print(P[j])
