@@ -1,3 +1,4 @@
+from email.errors import NonPrintableDefect
 from time import sleep
 import cv2
 import matlab.engine
@@ -6,11 +7,12 @@ import matplotlib. pyplot as plt
 import numpy as np
 import time
 
-img1_name = '03'
-img2_name = '04'
+img1_name = '08'
+img2_name = '09'
+img3_name = '10'
 res2 = None
-threshold = 0.01
-max_iter = 500
+threshold = 5.0e-5
+max_iter = 30000
 inst = [[3451.5, 0.0, 2312.0],
        [0.0,3451.5, 1734.0],
        [0.0, 0.0, 1.0]]
@@ -26,11 +28,14 @@ img1 = cv2.imread('./Data/sfm' + img1_name + '.jpg')
 gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
 img2 = cv2.imread('./Data/sfm' + img2_name + '.jpg')
 gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+img3 = cv2.imread('./Data/sfm' + img3_name + '.jpg')
+gray3 = cv2.cvtColor(img3, cv2.COLOR_BGR2GRAY)
 
 sift = cv2.SIFT_create()
 
 kp1, des1 = sift.detectAndCompute(img1,None)
 kp2, des2 = sift.detectAndCompute(img2,None)
+kp3, des3 = sift.detectAndCompute(img3,None)
 
 bf = cv2.BFMatcher()
 matches = bf.knnMatch(des1,des2,k=2)
@@ -38,10 +43,12 @@ matches = bf.knnMatch(des1,des2,k=2)
 good_kp1 = []
 good_kp2 = []
 good = []
+print_good = []
 
 for m,n in matches:
-    if m.distance < 0.70*n.distance:
+    if m.distance < 0.75*n.distance:
         good.append(m)
+        print_good.append([m])
     
 good = sorted(good, key=lambda x: x.distance)
 query_idx = [match.queryIdx for match in good]
@@ -92,7 +99,7 @@ for iter in range(max_iter):
         F = inst_1.T@Ei@inst_1
         #F = F.T
         det = np.linalg.det(F)
-        #const = 2 * F @ F.T @ F - np.trace(F@F.T)*F
+        const = 2 * Ei @ Ei.T @ Ei - np.trace(Ei@Ei.T)*Ei
         loss = np.diag(good_kp2_rand.T@F@good_kp1_rand)
         loss_all = np.diag(q2.T@F@q1)
         cnt_all = sum(np.where(((loss_all < threshold) & (loss_all > -threshold)), True, False))
@@ -100,12 +107,10 @@ for iter in range(max_iter):
             E_est = Ei
             cnt_max = cnt_all
             inlinear = np.where(((loss_all < threshold) & (loss_all > -threshold)))
-E_true, mask = cv2.findEssentialMat(good_kp1, good_kp2, method=cv2.RANSAC, focal=3451.5, pp=(2312, 1734), maxIters = 3000, threshold=0.01)
-print(E_true)
 print(E_est)
 print(cnt_max)
 inlinear = np.array(inlinear).reshape(-1)
-print(len(inlinear))
+
 """E_min = None
     s_min = 1e+200
     for i in range(len(E[0])):
@@ -136,10 +141,7 @@ print(s_est) """
 
 print("step C")
 U, s, VT = np.linalg.svd(E_est, full_matrices = True)
-print(s)
 u3 = U[:, 2].reshape(3, 1)
-print(U)
-print(u3)
 P = [
 np.append(U@W@VT, u3, axis=1),
 np.append(U@W@VT, -u3, axis=1),
@@ -152,9 +154,50 @@ res2 = cv2.resize(res2, dsize=(0, 0), fx=0.5, fy=0.5)
 cv2.imshow("BF with SIFT",res2)
 cv2.waitKey(0)
 cv2.d """
-for i in range(1):
-    for j in range(4):
-        print(P[j])
-        print(P[j][:, :3])
-        print(np.linalg.det(P[j][:, :3]))
-        #print(dt)
+q1 = inst_1@q1
+q2 = inst_1@q2
+EM0 = np.append(np.eye(3), np.zeros((3, 1)), axis=1)
+E_idx = NonPrintableDefect
+for j in range(4):
+    EM1 = P[j]
+    A = np.array([q1[0, inlinear[i]]*EM0[2] - EM0[0],
+                  q1[1, inlinear[i]]*EM0[2] - EM0[1],
+                  q2[0, inlinear[i]]*EM1[2] - EM1[0],
+                  q2[1, inlinear[i]]*EM1[2] - EM1[1]])
+    U_A, s_A, V_A = np.linalg.svd(A, full_matrices=True)
+    X = V_A[3]/V_A[3, 3]
+    print(X)
+    print(EM1@X)
+    if X[2]>0 and (EM1@X)[2]>0:
+        print("E index is " + str(j))
+        E_idx = j
+EM1 = P[E_idx]
+
+inlinear_X = []
+
+for i in range(len(inlinear)):
+    A = np.array([q1[0, inlinear[i]]*EM0[2] - EM0[0],
+                  q1[1, inlinear[i]]*EM0[2] - EM0[1],
+                  q2[0, inlinear[i]]*EM1[2] - EM1[0],
+                  q2[1, inlinear[i]]*EM1[2] - EM1[1]])
+    U_A, s_A, V_A = np.linalg.svd(A, full_matrices=True)
+    X = V_A[3]/V_A[3, 3]
+    inlinear_X.append(X[:3])
+inlinear_X = np.array(inlinear_X)
+
+print_X = np.array([])
+print_Y = np.array([])
+print_Z = np.array([])
+print_X = np.append(print_X, inlinear_X[:, 0])
+print_Y = np.append(print_Y, inlinear_X[:, 1])
+print_Z = np.append(print_Z, inlinear_X[:, 2])
+fig = plt.figure(figsize=(15, 15))
+ax = plt.axes(projection='3d')
+ax.scatter3D(print_X, print_Y, print_Z, c='b', marker='o')
+plt.show()
+
+matches2 = bf.knnMatch(des2,des3,k=2)
+for m,n in matches:
+    if m.distance < 0.75*n.distance:
+        good.append(m)
+        print_good.append([m])
