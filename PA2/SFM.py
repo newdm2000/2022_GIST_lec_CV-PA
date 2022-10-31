@@ -11,7 +11,7 @@ from tqdm import tqdm
 #---------setting----------
 image_num = 3
 threshold = 5.0e-5
-max_iter = 10000
+max_iter = 5000
 max_iter_pose = 3000
 inst = [[3451.5, 0.0, 2312.0],
        [0.0,3451.5, 1734.0],
@@ -57,6 +57,7 @@ kp = np.array(kp)
 des = np.array(des)
 img = np.array(img)
 gray = np.array(gray)
+
 """matches = np.array([[None]*image_num]*image_num)
 matches_cnt = np.array([[0]*image_num]*image_num)
 for i in tqdm(range(image_num), desc="match keypoint all images"):
