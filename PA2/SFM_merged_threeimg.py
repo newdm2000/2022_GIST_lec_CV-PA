@@ -6,15 +6,18 @@ import matplotlib. pyplot as plt
 import numpy as np
 import time
 from tqdm import tqdm
+import csv
+import pandas as pd
+#result write
 image_num = 3
-threshold = 1.0e-3
+threshold = 5.0e-4
 threshold_pose = 500
-max_iter = 3000
+max_iter = 10000
 max_iter_pose = 3000
-
 initial_img_num_1= 0
 initial_img_num_2= 1
 
+image_num = [3, 4, 5]
 inst = [[3451.5, 0.0, 2312.0],
        [0.0,3451.5, 1734.0],
        [0.0, 0.0, 1.0]]
@@ -24,10 +27,12 @@ W = [[0.0, -1.0, 0.0],
      [1.0, 0.0, 0.0],
      [0.0, 0.0, 1.0]]
 W = np.array(W)
+
 kp = []
 des = []
 img = []
 gray = []
+
 inlinear_x_all = np.array([])
 print_X = np.array([])
 print_Y = np.array([])
@@ -51,8 +56,8 @@ print("Image Count:" + str(image_num))
 
 #image_list_up
 img_list = []
-for i in range(image_num):
-    img_list.append('./Data/sfm' + format(i, '02') + '.jpg')
+for i in range(len(image_num)):
+    img_list.append('./Data/sfm' + format(image_num[i], '02') + '.jpg')
 
 #image_load_and_detect_keypoint
 for i, img_name in enumerate(tqdm(img_list, desc="image load and detect keypoint")):
@@ -63,7 +68,7 @@ for i, img_name in enumerate(tqdm(img_list, desc="image load and detect keypoint
     gray.append(_gray)
     kp.append(_kp)
     des.append(_des)
-
+image_num = len(image_num)
 #image_matches_keypoint_and_sorting
 matches = np.array([[None]*image_num]*image_num)
 matches_cnt = np.array([[0]*image_num]*image_num)
@@ -99,10 +104,12 @@ one = np.ones((1, max_idx))
 good_kp1 = np.array(good_kp1).reshape(-1, 2)
 q1 = good_kp1.T
 q1 = np.append(q1, one, axis=0)
-    
+norm_q1 = inst_1@q1
+
 good_kp2 = np.array(good_kp2).reshape(-1, 2)
 q2 = good_kp2.T
 q2 = np.append(q2, one, axis=0)
+norm_q2 = inst_1@q2
 
 #5 Point Algorithm with RANSAC
 E_est = None
@@ -110,32 +117,36 @@ cnt_max = 0
 inlinear = None
 for iter in tqdm(range(max_iter), desc="5 Point Algorithm with RANSAC"):
     random_pt = np.random.randint(0, max_idx, size=5)
-    good_kp1_rand = good_kp1[random_pt].T
-    good_kp1_rand = np.append(good_kp1_rand, np.array([[1.0, 1.0, 1.0, 1.0, 1.0]]), axis = 0)
-    good_kp1_rand_in = (inst_1@good_kp1_rand).tolist()
-    good_kp1_rand_in = matlab.double(good_kp1_rand_in)
-    good_kp2_rand = good_kp2[random_pt].T
-    good_kp2_rand = np.append(good_kp2_rand, np.array([[1.0, 1.0, 1.0, 1.0, 1.0]]), axis = 0)
-    good_kp2_rand_in = (inst_1@good_kp2_rand).tolist()
-    good_kp2_rand_in = matlab.double(good_kp2_rand_in)
-    E = eng.calibrated_fivepoint(good_kp1_rand_in, good_kp2_rand_in)
+    norm_q1_rand = norm_q1[:, random_pt]
+    norm_q1_rand_in = matlab.double(norm_q1_rand.tolist())
+    norm_q2_rand = norm_q2[:, random_pt]
+    norm_q2_rand_in = matlab.double(norm_q2_rand.tolist())
+    E = eng.calibrated_fivepoint(norm_q1_rand_in, norm_q2_rand_in)
     E = np.array(E)
     for j in range(len(E[0])):
         Ei = E[:, j].reshape(3, 3)
         det = np.linalg.det(Ei)
-        F = inst_1.T@Ei@inst_1
-        det = np.linalg.det(F)
         const = 2 * Ei @ Ei.T @ Ei - np.trace(Ei@Ei.T)*Ei
-        loss = np.diag(good_kp2_rand.T@F@good_kp1_rand)
-        loss_all = np.diag(q2.T@F@q1)
-        cnt_all = sum(np.where(((loss_all < threshold) & (loss_all > -threshold)), True, False))
+        loss = np.diag(norm_q2.T@Ei@norm_q1)
+        cnt_all = sum(np.where(((loss < threshold) & (loss > -threshold)), True, False))
         if cnt_max < cnt_all:
             E_est = Ei
             cnt_max = cnt_all
-            inlinear = np.where(((loss_all < threshold) & (loss_all > -threshold)))
+            inlinear_TF = np.where(((loss < threshold) & (loss > -threshold)), True, False)
+            inlinear = np.where(((loss < threshold) & (loss > -threshold)))
+
 print(cnt_max)
+E_true, mask = cv2.findEssentialMat(norm_q1[0:2].T, norm_q2[0:2].T, method=cv2.RANSAC, threshold=5.0e-3)
+print(E_true)
 inlinear = np.array(inlinear).reshape(-1)
 
+_print_kp = np.concatenate((norm_q1[0:2], norm_q2[0:2]), axis=0)
+_print_kp = np.concatenate((_print_kp, inlinear_TF.reshape(1, -1)), axis=0).T
+df = pd.DataFrame(_print_kp, columns=['q1_x','q1_y', 'q2_x', 'q2_y', 'inlinear'])
+df.to_csv('./result/init_kp.csv', mode='w')
+
+df = pd.DataFrame(E_est)
+df.to_csv('./result/Ematrix.csv', mode='w')
 
 ######################################################################################################
 #Step3, 4. Essential Matrix Decomposition & Triangulation
@@ -149,8 +160,6 @@ P = [
     np.append(U@W.T@VT, u3, axis=1),
     np.append(U@W.T@VT, -u3, axis=1)]
 
-q1 = inst_1@q1
-q2 = inst_1@q2
 EM_cnt = [0, 0, 0, 0]
 EM0 = np.append(np.eye(3), np.zeros((3, 1)), axis=1)
 E_idx = None
@@ -163,8 +172,9 @@ for j in range(4):
                   q2[1, inlinear[k]]*EM1[2] - EM1[1]])
         U_A, s_A, V_A = np.linalg.svd(A, full_matrices=True)
         X = V_A[3]/V_A[3, 3]
-        if X[2]>0 and (EM1@X)[2]>0:
-            EM_cnt[j] += 1
+        if X[2]>0 and (EM1@X.T)[2]>0:
+            EM_cnt[j] += 1          
+print(EM_cnt)
 E_idx = np.argmax(EM_cnt)
 EM1 = P[E_idx]
 print(E_idx)
@@ -180,12 +190,17 @@ for k in range(len(inlinear)):
     X = V_A[3]/V_A[3, 3]
     inlinear_X.append(X[:3])
 
+
 inlinear_X = np.array(inlinear_X)
-print_X = np.append(print_X, inlinear_X[:, 0])
+point_cloud = np.concatenate((inlinear_X, inlinear.reshape(-1, 1)), axis=1)
+df = pd.DataFrame(point_cloud, columns=['x','y','z','inlinear_idx'])
+df.to_csv('./result/3D_Point_Clouds.csv', mode='w')
+
+"""print_X = np.append(print_X, inlinear_X[:, 0])
 print_Y = np.append(print_Y, inlinear_X[:, 1])
-print_Z = np.append(print_Z, inlinear_X[:, 2])
+print_Z = np.append(print_Z, inlinear_X[:, 2])"""
 
-
+'''
 ######################################################################################################
 #Step5. Growing Step
 ######################################################################################################
@@ -196,13 +211,6 @@ train2_idx = [match.queryIdx for match in matches[initial_img_num_2, merge_img_i
 merge_idx = [match.trainIdx for match in matches[initial_img_num_2, merge_img_idx]]
 merge_kp1 = np.float32([kp[initial_img_num_2][ind].pt for ind in train2_idx])
 merge_kp2 = np.float32([kp[merge_img_idx][ind].pt for ind in merge_idx])
-
-merge_q1 = merge_kp1.T
-q1 = np.append(q1, one, axis=0)
-    
-good_kp2 = np.array(good_kp2).reshape(-1, 2)
-q2 = good_kp2.T
-q2 = np.append(q2, one, axis=0)
 
 idx_train_inter = []
 idx_3d = []
@@ -224,9 +232,9 @@ for iter in tqdm(range(max_iter_pose), desc="3 Point Algorithm with RANSAC"):
     point_3d = inlinear_X[idx_3d[random_pt, 0]]
     pkp1 = good_kp2[idx_train_inter[random_pt, 0]]
     merge_kp1_rand = merge_kp1[idx_train_inter[random_pt, 1]]
-    merge_kp1_rand = (inst_1@np.concatenate((merge_kp1_rand.T, np.ones((1, 3))))).T
+    merge_kp1_rand = (inst_1@np.concatenate((merge_kp1_rand.T, np.ones((1, 3))), axis=0)).T
     merge_kp2_rand = merge_kp2[idx_train_inter[random_pt, 1]]
-    merge_kp2_rand = (inst_1@np.concatenate((merge_kp2_rand.T, np.ones((1, 3))))).T
+    merge_kp2_rand = (inst_1@np.concatenate((merge_kp2_rand.T, np.ones((1, 3))), axis=0)).T
     pnp_in = np.concatenate((merge_kp2_rand, point_3d), axis=1)
     pnp_in = matlab.double(pnp_in)
     output = eng.PerspectiveThreePoint(pnp_in)
@@ -243,20 +251,27 @@ for iter in tqdm(range(max_iter_pose), desc="3 Point Algorithm with RANSAC"):
             if pixel_cnt > pixel_cnt_max:
                 P2_max = P2
                 pixel_cnt_max = pixel_cnt
-                inlinear_merge = np.where((loss < threshold_pose))
-
-
-
-        
-EM0 = EM1                
-EM1 = P2_max
-for k in range(len(inlinear_merge)):
-    A = np.array([q1[0, inlinear[k]]*EM0[2] - EM0[0],
-                  q1[1, inlinear[k]]*EM0[2] - EM0[1],
-                  q2[0, inlinear[k]]*EM1[2] - EM1[0],
-                  q2[1, inlinear[k]]*EM1[2] - EM1[1]])
+inlinear_X = inlinear_X.tolist()
+merge_q1 = (inst_1@np.concatenate((merge_kp1.T, np.ones((1, len(merge_kp1)))), axis=0)).T
+merge_q2 = (inst_1@np.concatenate((merge_kp2.T, np.ones((1, len(merge_kp2)))), axis=0)).T
+EM0 = EM1
+EM2 = P2_max
+for k in range(len(merge_q1)):
+    A = np.array([merge_q1[k, 0]*EM0[2] - EM0[0],
+                  merge_q1[k, 1]*EM0[2] - EM0[1],
+                  merge_q2[k, 0]*EM1[2] - EM1[0],
+                  merge_q2[k, 0]*EM1[2] - EM1[1]])
     U_A, s_A, V_A = np.linalg.svd(A, full_matrices=True)
     X = V_A[3]/V_A[3, 3]
-    inlinear_X.append(X[:3])        
-print(pixel_cnt_max)
-print(P2_max)
+    inlinear_X.append(X[:3])
+inlinear_X = np.array(inlinear_X)
+'''
+print("----------------End----------------")
+print_X = np.append(print_X, inlinear_X[:, 0])
+print_Y = np.append(print_Y, inlinear_X[:, 1])
+print_Z = np.append(print_Z, inlinear_X[:, 2])
+print(len(print_X))
+fig = plt.figure(figsize=(15, 15))
+ax = plt.axes(projection='3d')
+ax.scatter3D(print_X, print_Y, print_Z, c='b', marker='o')
+plt.show()
