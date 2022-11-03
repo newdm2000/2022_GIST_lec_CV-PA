@@ -6,21 +6,22 @@ import matplotlib. pyplot as plt
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
+import glob
 #import open3d as o3d
 #result write
-#cherry picking 2022 threshhold 5.0e-4 iter 5000 match threshhold 0.80
+#cherry picking 2022 threshhold 1.0e-4 iter 5000 match threshhold 0.80
 np.random.seed(2022)
 image_num = 3
-threshold = 5.0e-4
+threshold = 2.0e-4
 threshold_pose = 500
 max_iter = 5000
 max_iter_pose = 3000
-initial_img_num_1= 0
+initial_img_num_1= 2
 initial_img_num_2= 1
-image_num = [3, 4, 5]
-inst = [[3451.5, 0.0, 2312.0],
-       [0.0,3451.5, 1734.0],
-       [0.0, 0.0, 1.0]]
+image_num = [0, 1, 2]
+inst = [[2.68439246e+03, 0.00000000e+00, 1.98415047e+03],
+ [0.00000000e+00, 2.69934836e+03, 1.48623339e+03],
+ [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]
 inst = np.array(inst)
 inst_1 = np.linalg.inv(inst)
 W = [[0.0, -1.0, 0.0],
@@ -57,8 +58,9 @@ print("Image Count:" + str(image_num))
 
 #image_list_up
 img_list = []
-for i in range(len(image_num)):
-    img_list.append('./Data/sfm' + format(image_num[i], '02') + '.jpg')
+img_list = glob.glob('./Custom_Data/Data/*.jpg')
+"""for i in range(len(image_num)):
+    img_list.append('./Data/sfm' + format(image_num[i], '02') + '.jpg')"""
 
 #image_load_and_detect_keypoint
 for i, img_name in enumerate(tqdm(img_list, desc="image load and detect keypoint")):
@@ -79,7 +81,7 @@ for i in tqdm(range(image_num), desc="match keypoint all images"):
             _matches = bf.knnMatch(des[i], des[j], k=2)
             good = []
             for m,n in _matches:
-                if m.distance < 0.80*n.distance:
+                if m.distance < 0.85*n.distance:
                     good.append(m)
             good = sorted(good, key=lambda x: x.distance)
             matches[i, j] = good
@@ -137,7 +139,7 @@ for iter in tqdm(range(max_iter), desc="5 Point Algorithm with RANSAC"):
             inlinear = np.where(((loss < threshold) & (loss > 0)))
             
 inlinear = np.array(inlinear).reshape(-1)
-
+print(len(inlinear))
 _print_kp = np.concatenate((norm_q1[0:2], norm_q2[0:2]), axis=0)
 _print_kp = np.concatenate((_print_kp, inlinear_TF.reshape(1, -1)), axis=0).T
 df = pd.DataFrame(_print_kp, columns=['q1_x','q1_y', 'q2_x', 'q2_y', 'inlinear'])
@@ -186,7 +188,7 @@ for k in range(len(inlinear)):
     U_A, s_A, V_A = np.linalg.svd(A, full_matrices=True)
     X = V_A[3]/V_A[3, 3]
     if X[2]>0 and (EM1@X.T)[2] > 0:
-        if X[2] < 5 and X[2] > 1 and (EM1@X.T)[2] < 5 and (EM1@X.T)[2] > 1:
+        if X[2] < 2 and X[2] > 1 and (EM1@X.T)[2] < 2 and (EM1@X.T)[2] > 1:
             inlinear_X.append(X[:3])
             _inlinear.append(inlinear[k])
         
