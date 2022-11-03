@@ -1,18 +1,16 @@
-from email.errors import NonPrintableDefect
 from time import sleep
 import cv2
 import matlab.engine
 import matplotlib. pyplot as plt
 import numpy as np
-import time
 from tqdm import tqdm
-import csv
 import pandas as pd
+import open3d as o3d
 #result write
 image_num = 3
-threshold = 5.0e-4
+threshold = 1.0e-4
 threshold_pose = 500
-max_iter = 10000
+max_iter = 3000
 max_iter_pose = 3000
 initial_img_num_1= 0
 initial_img_num_2= 1
@@ -128,16 +126,13 @@ for iter in tqdm(range(max_iter), desc="5 Point Algorithm with RANSAC"):
         det = np.linalg.det(Ei)
         const = 2 * Ei @ Ei.T @ Ei - np.trace(Ei@Ei.T)*Ei
         loss = np.diag(norm_q2.T@Ei@norm_q1)
-        cnt_all = sum(np.where(((loss < threshold) & (loss > -threshold)), True, False))
+        cnt_all = sum(np.where(((loss < threshold) & (loss > 0)), True, False))
         if cnt_max < cnt_all:
             E_est = Ei
             cnt_max = cnt_all
-            inlinear_TF = np.where(((loss < threshold) & (loss > -threshold)), True, False)
-            inlinear = np.where(((loss < threshold) & (loss > -threshold)))
-
-print(cnt_max)
-E_true, mask = cv2.findEssentialMat(norm_q1[0:2].T, norm_q2[0:2].T, method=cv2.RANSAC, threshold=5.0e-3)
-print(E_true)
+            inlinear_TF = np.where(((loss < threshold) & (loss > 0)), True, False)
+            inlinear = np.where(((loss < threshold) & (loss > 0)))
+            
 inlinear = np.array(inlinear).reshape(-1)
 
 _print_kp = np.concatenate((norm_q1[0:2], norm_q2[0:2]), axis=0)
@@ -153,54 +148,55 @@ df.to_csv('./result/Ematrix.csv', mode='w')
 ######################################################################################################
 print("-----------------Step3, 4 Essential Matrix Decomposition & Triangulation-----------------")
 U, s, VT = np.linalg.svd(E_est, full_matrices = True)
+print(s)
 u3 = U[:, 2].reshape(3, 1)
 P = [
     np.append(U@W@VT, u3, axis=1),
     np.append(U@W@VT, -u3, axis=1),
     np.append(U@W.T@VT, u3, axis=1),
     np.append(U@W.T@VT, -u3, axis=1)]
-
 EM_cnt = [0, 0, 0, 0]
 EM0 = np.append(np.eye(3), np.zeros((3, 1)), axis=1)
 E_idx = None
 for j in range(4):
     EM1 = P[j]
     for k in range(len(inlinear)):
-        A = np.array([q1[0, inlinear[k]]*EM0[2] - EM0[0],
-                  q1[1, inlinear[k]]*EM0[2] - EM0[1],
-                  q2[0, inlinear[k]]*EM1[2] - EM1[0],
-                  q2[1, inlinear[k]]*EM1[2] - EM1[1]])
+        A = np.array([norm_q1[0, inlinear[k]]*EM0[2] - EM0[0],
+                  norm_q1[1, inlinear[k]]*EM0[2] - EM0[1],
+                  norm_q2[0, inlinear[k]]*EM1[2] - EM1[0],
+                  norm_q2[1, inlinear[k]]*EM1[2] - EM1[1]])
         U_A, s_A, V_A = np.linalg.svd(A, full_matrices=True)
         X = V_A[3]/V_A[3, 3]
         if X[2]>0 and (EM1@X.T)[2]>0:
-            EM_cnt[j] += 1          
+            EM_cnt[j] += 1
+            
 print(EM_cnt)
 E_idx = np.argmax(EM_cnt)
 EM1 = P[E_idx]
-print(E_idx)
-print(EM1)
-P_all =np.concatenate((P_all, EM1.reshape(1, 3, 4)), axis=0)
 inlinear_X = []
+_inlinear = []
 for k in range(len(inlinear)):
-    A = np.array([q1[0, inlinear[k]]*EM0[2] - EM0[0],
-                  q1[1, inlinear[k]]*EM0[2] - EM0[1],
-                  q2[0, inlinear[k]]*EM1[2] - EM1[0],
-                  q2[1, inlinear[k]]*EM1[2] - EM1[1]])
+    A = np.array([norm_q1[0, inlinear[k]]*EM0[2] - EM0[0],
+                  norm_q1[1, inlinear[k]]*EM0[2] - EM0[1],
+                  norm_q2[0, inlinear[k]]*EM1[2] - EM1[0],
+                  norm_q2[1, inlinear[k]]*EM1[2] - EM1[1]])
     U_A, s_A, V_A = np.linalg.svd(A, full_matrices=True)
     X = V_A[3]/V_A[3, 3]
-    inlinear_X.append(X[:3])
-
-
+    if X[2]>0 and (EM1@X.T)[2]>0:
+        inlinear_X.append(X[:3])
+        _inlinear.append(inlinear[k])
+        
+_inlinear = np.array(_inlinear)
 inlinear_X = np.array(inlinear_X)
-point_cloud = np.concatenate((inlinear_X, inlinear.reshape(-1, 1)), axis=1)
+point_cloud = np.concatenate((inlinear_X, _inlinear.reshape(-1, 1)), axis=1)
 df = pd.DataFrame(point_cloud, columns=['x','y','z','inlinear_idx'])
-df.to_csv('./result/3D_Point_Clouds.csv', mode='w')
+df.to_csv('./result/3D_Point_Clouds_Two_Views.csv', mode='w')
 
 """print_X = np.append(print_X, inlinear_X[:, 0])
 print_Y = np.append(print_Y, inlinear_X[:, 1])
 print_Z = np.append(print_Z, inlinear_X[:, 2])"""
 
-'''
+
 ######################################################################################################
 #Step5. Growing Step
 ######################################################################################################
@@ -265,7 +261,7 @@ for k in range(len(merge_q1)):
     X = V_A[3]/V_A[3, 3]
     inlinear_X.append(X[:3])
 inlinear_X = np.array(inlinear_X)
-'''
+
 print("----------------End----------------")
 print_X = np.append(print_X, inlinear_X[:, 0])
 print_Y = np.append(print_Y, inlinear_X[:, 1])
