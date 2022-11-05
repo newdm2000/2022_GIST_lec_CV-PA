@@ -69,7 +69,6 @@ image_num = len(img_list)
 #image_load_and_detect_keypoint
 for i, img_name in enumerate(tqdm(img_list, desc="image load and detect keypoint")):
     _img = cv2.imread(img_name)
-    _img = cv2.cvtColor(_img, cv2.COLOR_BGR2RGB)
     _gray = cv2.cvtColor(_img, cv2.COLOR_BGR2GRAY)
     _kp, _des = sift.detectAndCompute(_img, None)
     img.append(_img)
@@ -122,10 +121,14 @@ q2 = good_kp2.T
 q2 = np.append(q2, one, axis=0)
 norm_q2 = inst_1@q2
 
-_print_rgb1 = img[0]
-_print_rgb1 = _print_rgb1[q1[1].astype(np.int32), q1[0].astype(np.int32)]
-_print_rgb2 = img[1]
-_print_rgb2 = _print_rgb2[q2[1].astype(np.int32), q2[0].astype(np.int32)]
+_print_bgr1 = img[0]
+_print_bgr1 = _print_bgr1[q1[1].astype(np.int32), q1[0].astype(np.int32)]
+_print_rgb1 = np.concatenate((_print_bgr1[:, 2].reshape(-1, 1), _print_bgr1[:, 1].reshape(-1, 1)), axis=1)
+_print_rgb1 = np.concatenate((_print_rgb1, _print_bgr1[:, 0].reshape(-1, 1)), axis=1)
+_print_bgr2 = img[1]
+_print_bgr2 = _print_bgr2[q2[1].astype(np.int32), q2[0].astype(np.int32)]
+_print_rgb2 = np.concatenate((_print_bgr2[:, 2].reshape(-1, 1), _print_bgr1[:, 1].reshape(-1, 1)), axis=1)
+_print_rgb2 = np.concatenate((_print_rgb2, _print_bgr2[:, 0].reshape(-1, 1)), axis=1)
 _print_rgb =  (_print_rgb1 + _print_rgb2) / 2
 
 #5 Point Algorithm with RANSAC
@@ -252,10 +255,14 @@ merge_q2 = merge_kp2.T
 merge_q2 = np.append(merge_q2, merge_one, axis=0)
 norm_merge_q2 = inst_1@merge_q2
 
-_merge_print_rgb1 = img[1]
-_merge_print_rgb1 = _merge_print_rgb1[merge_q1[1].astype(np.int32), merge_q1[0].astype(np.int32)]
-_merge_print_rgb2 = img[2]
-_merge_print_rgb2 = _merge_print_rgb2[merge_q2[1].astype(np.int32), merge_q2[0].astype(np.int32)]
+_merge_print_bgr1 = img[1]
+_merge_print_bgr1 = _merge_print_bgr1[merge_q1[1].astype(np.int32), merge_q1[0].astype(np.int32)]
+_merge_print_rgb1 = np.concatenate((_merge_print_bgr1[:, 2].reshape(-1, 1), _merge_print_bgr1[:, 1].reshape(-1, 1)), axis=1)
+_merge_print_rgb1 = np.concatenate((_merge_print_rgb1, _merge_print_bgr1[:, 1].reshape(-1, 1)), axis=1)
+_merge_print_bgr2 = img[2]
+_merge_print_bgr2 = _merge_print_bgr2[merge_q2[1].astype(np.int32), merge_q2[0].astype(np.int32)]
+_merge_print_rgb2 = np.concatenate((_merge_print_bgr2[:, 2].reshape(-1, 1), _merge_print_bgr2[:, 1].reshape(-1, 1)), axis=1)
+_merge_print_rgb2 = np.concatenate((_merge_print_rgb2, _merge_print_bgr2[:, 1].reshape(-1, 1)), axis=1)
 _merge_print_rgb =  (_merge_print_rgb1 + _merge_print_rgb2) / 2
 
 _print_kp = np.concatenate((norm_merge_q1[0:2], norm_merge_q2[0:2]), axis=0).T
