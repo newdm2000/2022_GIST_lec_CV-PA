@@ -64,7 +64,6 @@ for i in range(len(image_num)):
 #image_load_and_detect_keypoint
 for i, img_name in enumerate(tqdm(img_list, desc="image load and detect keypoint")):
     _img = cv2.imread(img_name)
-    _img = cv2.cvtColor(_img, cv2.COLOR_BGR2RGB)
     _gray = cv2.cvtColor(_img, cv2.COLOR_BGR2GRAY)
     _kp, _des = sift.detectAndCompute(_img, None)
     img.append(_img)

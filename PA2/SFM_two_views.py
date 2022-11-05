@@ -109,10 +109,14 @@ q2 = good_kp2.T
 q2 = np.append(q2, one, axis=0)
 norm_q2 = inst_1@q2
 
-_print_rgb1 = img[0]
-_print_rgb1 = _print_rgb1[q1[1].astype(np.int32), q1[0].astype(np.int32)]
-_print_rgb2 = img[1]
-_print_rgb2 = _print_rgb2[q2[1].astype(np.int32), q2[0].astype(np.int32)]
+_print_bgr1 = img[0]
+_print_bgr1 = _print_bgr1[q1[1].astype(np.int32), q1[0].astype(np.int32)]
+_print_rgb1 = np.concatenate((_print_bgr1[:, 2].reshape(-1, 1), _print_bgr1[:, 1].reshape(-1, 1)), axis=1)
+_print_rgb1 = np.concatenate((_print_rgb1, _print_bgr1[:, 0].reshape(-1, 1)), axis=1)
+_print_bgr2 = img[1]
+_print_bgr2 = _print_bgr2[q2[1].astype(np.int32), q2[0].astype(np.int32)]
+_print_rgb2 = np.concatenate((_print_bgr2[:, 2].reshape(-1, 1), _print_bgr1[:, 1].reshape(-1, 1)), axis=1)
+_print_rgb2 = np.concatenate((_print_rgb2, _print_bgr2[:, 0].reshape(-1, 1)), axis=1)
 _print_rgb =  (_print_rgb1 + _print_rgb2) / 2
 
 #5 Point Algorithm with RANSAC
