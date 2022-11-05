@@ -11,12 +11,12 @@ import glob
 #result write
 #cherry picking 2022 threshhold 2.0e-4 iter 5000 match threshhold 0.85
 np.random.seed(2022)
-threshold = 2.0e-4
+threshold = 1.0e-5
 threshold_knn = 0.85
-max_iter = 5000
+max_iter = 3000
 
 initial_img_num_1= 0
-initial_img_num_2= 3
+initial_img_num_2= 1
 
 inst = [[2.68439246e+03, 0.00000000e+00, 1.98415047e+03],
  [0.00000000e+00, 2.69934836e+03, 1.48623339e+03],
